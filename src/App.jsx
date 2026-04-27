@@ -10,14 +10,12 @@ export default function App() {
   const [pass, setPass] = useState("");
 
   useEffect(() => {
-    if (localStorage.getItem("office_auth") === "ok") {
-      setAuth(true);
-    }
+    if (localStorage.getItem("auth") === "ok") setAuth(true);
   }, []);
 
   const login = () => {
     if (pass === PASSWORD) {
-      localStorage.setItem("office_auth", "ok");
+      localStorage.setItem("auth", "ok");
       setAuth(true);
     }
   };
@@ -56,11 +54,13 @@ export default function App() {
 function Dashboard() {
   const [data, setData] = useState([]);
 
+  const [mode, setMode] = useState("EMPLOYEES"); // EMPLOYEES / DEPTS
   const [floorMode, setFloorMode] = useState("ALL");
   const [floor, setFloor] = useState(1);
 
+  const [search, setSearch] = useState("");
   const [selectedRoom, setSelectedRoom] = useState(null);
-  const [selectedSeat, setSelectedSeat] = useState(null);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   useEffect(() => {
     fetch(SHEET_URL)
@@ -74,10 +74,10 @@ function Dashboard() {
           return {
             floor: Number(c[0]),
             room_id: c[1],
-            departments: c[3],
+            dept: c[3],
             seat_id: c[4],
             status: (c[5] || "other").toLowerCase(),
-            last_name: c[6] || "",
+            name: c[6] || "",
           };
         });
 
@@ -85,18 +85,21 @@ function Dashboard() {
       });
   }, []);
 
+  // FILTERS
   const filtered = useMemo(() => {
     return data.filter((d) => {
       const okFloor =
-        floorMode === "ALL"
-          ? true
-          : d.floor === floor;
+        floorMode === "ALL" ? true : d.floor === floor;
 
-      return okFloor;
+      const okSearch =
+        !search ||
+        (d.name || "").toLowerCase().includes(search.toLowerCase());
+
+      return okFloor && okSearch;
     });
-  }, [data, floorMode, floor]);
+  }, [data, floorMode, floor, search]);
 
-  // KPI (КРІ повернули)
+  // KPI (КРІ залишено)
   const kpi = useMemo(() => {
     let free = 0,
       occ = 0,
@@ -116,17 +119,20 @@ function Dashboard() {
 
     filtered.forEach((r) => {
       if (!map[r.room_id]) {
-        map[r.room_id] = {
-          room_id: r.room_id,
-          seats: [],
-        };
+        map[r.room_id] = { room_id: r.room_id, seats: [] };
       }
-
       map[r.room_id].seats.push(r);
     });
 
     return Object.values(map);
   }, [filtered]);
+
+  const refresh = () => {
+    setSearch("");
+    setSelectedRoom(null);
+    setSelectedEmployee(null);
+    setFloorMode("ALL");
+  };
 
   const cols = Math.max(2, Math.ceil(Math.sqrt(rooms.length)));
   const cellW = 240;
@@ -137,9 +143,70 @@ function Dashboard() {
 
   return (
     <div style={styles.page}>
-      <h2>🏢 Office Dashboard</h2>
+      <h2>🏢 Office BI</h2>
 
-      {/* KPI BAR */}
+      {/* CONTROLS */}
+      <div style={styles.controls}>
+        {/* floor */}
+        <select
+          value={floorMode}
+          onChange={(e) => setFloorMode(e.target.value)}
+        >
+          <option value="ALL">All Floors</option>
+          <option value="ONE">One Floor</option>
+        </select>
+
+        {floorMode === "ONE" && (
+          <select
+            value={floor}
+            onChange={(e) => setFloor(Number(e.target.value))}
+          >
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((f) => (
+              <option key={f}>{f}</option>
+            ))}
+          </select>
+        )}
+
+        {/* search */}
+        <input
+          placeholder="Search surname..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={styles.inputSmall}
+        />
+
+        {/* mode */}
+        <button
+          onClick={() => setMode("EMPLOYEES")}
+          style={{
+            ...styles.modeBtn,
+            background:
+              mode === "EMPLOYEES" ? "#2563eb" : "#e5e7eb",
+            color: mode === "EMPLOYEES" ? "#fff" : "#000",
+          }}
+        >
+          Працівники
+        </button>
+
+        <button
+          onClick={() => setMode("DEPTS")}
+          style={{
+            ...styles.modeBtn,
+            background:
+              mode === "DEPTS" ? "#2563eb" : "#e5e7eb",
+            color: mode === "DEPTS" ? "#fff" : "#000",
+          }}
+        >
+          Департаменти
+        </button>
+
+        {/* refresh */}
+        <button onClick={refresh} style={styles.refresh}>
+          🔄 Refresh
+        </button>
+      </div>
+
+      {/* KPI */}
       <div style={styles.kpiRow}>
         <Kpi label="Free" val={kpi.free} color="#22c55e" />
         <Kpi label="Occupied" val={kpi.occ} color="#ef4444" />
@@ -156,48 +223,38 @@ function Dashboard() {
             const x = 20 + (i % cols) * cellW;
             const y = 20 + Math.floor(i / cols) * cellH;
 
-            const stats = {
-              free: r.seats.filter((s) => s.status === "free").length,
-              occ: r.seats.filter((s) => s.status === "occupied").length,
-              other: r.seats.filter((s) => s.status === "other").length,
-            };
+            const highlight =
+              selectedEmployee &&
+              r.seats.some(
+                (s) =>
+                  s.name === selectedEmployee.name
+              );
 
             return (
               <g key={r.room_id}>
-                {/* ROOM BOX */}
+                {/* room */}
                 <rect
                   x={x}
                   y={y}
                   width="220"
                   height="120"
-                  rx="16"
-                  fill="#1f2937"
-                  onClick={() => setSelectedRoom(r.room_id)}
+                  rx="14"
+                  fill={highlight ? "#1d4ed8" : "#1f2937"}
                   style={{ cursor: "pointer" }}
+                  onClick={() => setSelectedRoom(r.room_id)}
                 />
 
-                {/* ROOM ID */}
-                <text x={x + 10} y={y + 18} fill="#fff" fontSize="12">
+                <text x={x + 10} y={y + 18} fill="#fff">
                   {r.room_id}
                 </text>
 
-                {/* 🔥 3 ЧИСЛА НА КОЖНОМУ КВАДРАТІ */}
-                <text x={x + 10} y={y + 45} fill="#22c55e" fontSize="11">
-                  🟢 {stats.free}
-                </text>
-
-                <text x={x + 10} y={y + 65} fill="#ef4444" fontSize="11">
-                  🔴 {stats.occ}
-                </text>
-
-                <text x={x + 10} y={y + 85} fill="#94a3b8" fontSize="11">
-                  ⚪ {stats.other}
-                </text>
-
-                {/* SEATS */}
+                {/* seats */}
                 {r.seats.map((s, idx) => {
-                  const sx = x + 120 + (idx % 6) * 14;
+                  const sx = x + 10 + (idx % 6) * 14;
                   const sy = y + 30 + Math.floor(idx / 6) * 14;
+
+                  const isSel =
+                    selectedEmployee?.name === s.name;
 
                   return (
                     <rect
@@ -213,7 +270,12 @@ function Dashboard() {
                           ? "#ef4444"
                           : "#94a3b8"
                       }
-                      onClick={() => setSelectedSeat(s)}
+                      stroke={isSel ? "#facc15" : "none"}
+                      strokeWidth={isSel ? 2 : 0}
+                      onClick={() => {
+                        setSelectedEmployee(s);
+                        setSelectedRoom(r.room_id);
+                      }}
                     />
                   );
                 })}
@@ -231,8 +293,19 @@ function Dashboard() {
           {filtered
             .filter((d) => d.room_id === selectedRoom)
             .map((d, i) => (
-              <div key={i}>
-                {d.seat_id} — {d.last_name}
+              <div
+                key={i}
+                onClick={() => setSelectedEmployee(d)}
+                style={{
+                  padding: 4,
+                  cursor: "pointer",
+                  background:
+                    selectedEmployee?.seat_id === d.seat_id
+                      ? "#dbeafe"
+                      : "transparent",
+                }}
+              >
+                {d.seat_id} — {d.name}
               </div>
             ))}
         </div>
@@ -251,47 +324,31 @@ function Kpi({ label, val, color }) {
 }
 
 const styles = {
-  page: {
-    fontFamily: "Arial",
-    padding: 12,
-    background: "linear-gradient(#e0f2fe,#f8fafc)",
-    minHeight: "100vh",
-  },
+  page: { fontFamily: "Arial", padding: 10 },
 
-  loginBg: {
-    height: "100vh",
+  controls: {
     display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    background: "#0f172a",
+    gap: 8,
+    flexWrap: "wrap",
+    marginBottom: 10,
   },
 
-  loginCard: {
-    background: "white",
-    padding: 20,
-    borderRadius: 12,
-    width: 280,
+  inputSmall: {
+    padding: 6,
+    borderRadius: 6,
   },
 
-  input: {
-    width: "100%",
-    padding: 8,
-    marginTop: 10,
+  modeBtn: {
+    padding: "6px 10px",
+    borderRadius: 6,
+    border: "none",
   },
 
-  btn: {
-    width: "100%",
-    marginTop: 10,
-    padding: 8,
-    background: "#2563eb",
-    color: "white",
-    border: 0,
-  },
-
-  brand: {
-    marginTop: 10,
-    fontSize: 11,
-    opacity: 0.7,
+  refresh: {
+    padding: "6px 10px",
+    borderRadius: 6,
+    background: "#f59e0b",
+    border: "none",
   },
 
   kpiRow: {
@@ -301,21 +358,20 @@ const styles = {
   },
 
   kpi: {
-    background: "white",
+    background: "#fff",
     padding: 8,
     borderRadius: 10,
-    minWidth: 80,
   },
 
   map: {
-    background: "white",
-    borderRadius: 12,
+    background: "#fff",
     padding: 10,
+    borderRadius: 10,
   },
 
   panel: {
     marginTop: 10,
-    background: "white",
+    background: "#fff",
     padding: 10,
     borderRadius: 10,
   },
