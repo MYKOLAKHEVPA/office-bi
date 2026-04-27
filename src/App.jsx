@@ -53,7 +53,6 @@ export default function App() {
 function Dashboard() {
   const [data, setData] = useState([]);
 
-  // 🔥 FIX: EMP / DEPT mode
   const [viewMode, setViewMode] = useState("EMPLOYEES");
 
   const [floorMode, setFloorMode] = useState("ALL");
@@ -63,7 +62,7 @@ function Dashboard() {
   const [searchDept, setSearchDept] = useState("");
 
   const [selectedRoom, setSelectedRoom] = useState(null);
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [selectedSeat, setSelectedSeat] = useState(null);
 
   useEffect(() => {
     fetch(SHEET_URL)
@@ -88,29 +87,25 @@ function Dashboard() {
       });
   }, []);
 
-  // 🔥 FIX: filters for both modes
+  // 🔥 FILTERS (EMP + DEPT SEARCH)
   const filtered = useMemo(() => {
     return data.filter((d) => {
       const okFloor =
         floorMode === "ALL" ? true : d.floor === floor;
 
       const okEmp =
-        viewMode !== "EMPLOYEES"
-          ? true
-          : !searchEmp ||
-            d.name.toLowerCase().includes(searchEmp.toLowerCase());
+        !searchEmp ||
+        d.name.toLowerCase().includes(searchEmp.toLowerCase());
 
       const okDept =
-        viewMode !== "DEPTS"
-          ? true
-          : !searchDept ||
-            (d.dept || "")
-              .toLowerCase()
-              .includes(searchDept.toLowerCase());
+        !searchDept ||
+        (d.dept || "")
+          .toLowerCase()
+          .includes(searchDept.toLowerCase());
 
       return okFloor && okEmp && okDept;
     });
-  }, [data, floorMode, floor, viewMode, searchEmp, searchDept]);
+  }, [data, floorMode, floor, searchEmp, searchDept]);
 
   // KPI (НЕ чіпав)
   const kpi = useMemo(() => {
@@ -140,17 +135,9 @@ function Dashboard() {
     return Object.values(map);
   }, [filtered]);
 
-  const refresh = () => {
-    setSearchEmp("");
-    setSearchDept("");
-    setSelectedRoom(null);
-    setSelectedEmployee(null);
-    setFloorMode("ALL");
-  };
-
   const cols = Math.max(2, Math.ceil(Math.sqrt(rooms.length)));
   const cellW = 240;
-  const cellH = 160;
+  const cellH = 170;
 
   const svgW = cols * cellW + 40;
   const svgH = Math.ceil(rooms.length / cols) * cellH + 40;
@@ -181,49 +168,25 @@ function Dashboard() {
         )}
 
         {/* EMP SEARCH */}
-        {viewMode === "EMPLOYEES" && (
-          <input
-            placeholder="Search employee..."
-            value={searchEmp}
-            onChange={(e) => setSearchEmp(e.target.value)}
-          />
-        )}
+        <input
+          placeholder="Search employee..."
+          value={searchEmp}
+          onChange={(e) => setSearchEmp(e.target.value)}
+        />
 
         {/* DEPT SEARCH */}
-        {viewMode === "DEPTS" && (
-          <input
-            placeholder="Search department..."
-            value={searchDept}
-            onChange={(e) => setSearchDept(e.target.value)}
-          />
-        )}
+        <input
+          placeholder="Search department..."
+          value={searchDept}
+          onChange={(e) => setSearchDept(e.target.value)}
+        />
 
-        <button
-          onClick={() => setViewMode("EMPLOYEES")}
-          style={{
-            ...styles.btnMode,
-            background:
-              viewMode === "EMPLOYEES" ? "#2563eb" : "#e5e7eb",
-            color: viewMode === "EMPLOYEES" ? "#fff" : "#000",
-          }}
-        >
+        <button onClick={() => setViewMode("EMPLOYEES")}>
           Працівники
         </button>
 
-        <button
-          onClick={() => setViewMode("DEPTS")}
-          style={{
-            ...styles.btnMode,
-            background:
-              viewMode === "DEPTS" ? "#2563eb" : "#e5e7eb",
-            color: viewMode === "DEPTS" ? "#fff" : "#000",
-          }}
-        >
+        <button onClick={() => setViewMode("DEPTS")}>
           Департаменти
-        </button>
-
-        <button onClick={refresh} style={styles.refresh}>
-          🔄
         </button>
       </div>
 
@@ -244,44 +207,31 @@ function Dashboard() {
             const x = 20 + (i % cols) * cellW;
             const y = 20 + Math.floor(i / cols) * cellH;
 
-            const stats = {
-              free: r.seats.filter((s) => s.status === "free").length,
-              occ: r.seats.filter((s) => s.status === "occupied").length,
-              other: r.seats.filter((s) => s.status === "other").length,
-            };
-
             return (
               <g key={r.room_id}>
+                {/* ROOM BOX */}
                 <rect
                   x={x}
                   y={y}
                   width="220"
-                  height="120"
+                  height="130"
                   rx="12"
                   fill="#1f2937"
                   onClick={() => setSelectedRoom(r.room_id)}
                 />
 
-                {/* 3 ЦИФРИ (НЕ ПРИБИРАВ) */}
-                <text x={x + 10} y={y + 40} fill="#22c55e">
-                  🟢 {stats.free}
-                </text>
-
-                <text x={x + 10} y={y + 60} fill="#ef4444">
-                  🔴 {stats.occ}
-                </text>
-
-                <text x={x + 10} y={y + 80} fill="#94a3b8">
-                  ⚪ {stats.other}
+                {/* 🔥 ROOM NUMBER (ДОДАНО) */}
+                <text x={x + 10} y={y + 18} fill="#fff">
+                  {r.room_id}
                 </text>
 
                 {/* SEATS */}
                 {r.seats.map((s, idx) => {
-                  const sx = x + 120 + (idx % 6) * 12;
+                  const sx = x + 10 + (idx % 6) * 12;
                   const sy = y + 30 + Math.floor(idx / 6) * 12;
 
                   const isSel =
-                    selectedEmployee?.seat_id === s.seat_id;
+                    selectedSeat?.seat_id === s.seat_id;
 
                   return (
                     <rect
@@ -298,7 +248,7 @@ function Dashboard() {
                           : "#94a3b8"
                       }
                       stroke={isSel ? "#facc15" : "none"}
-                      onClick={() => setSelectedEmployee(s)}
+                      onClick={() => setSelectedSeat(s)}
                     />
                   );
                 })}
@@ -308,18 +258,15 @@ function Dashboard() {
         </svg>
       </div>
 
-      {/* LOWER PANEL */}
-      {selectedRoom && (
+      {/* DETAILS */}
+      {selectedSeat && (
         <div style={styles.panel}>
-          <h4>Room {selectedRoom}</h4>
+          <h4>
+            {selectedSeat.seat_id} — {selectedSeat.name}
+          </h4>
 
-          {filtered
-            .filter((d) => d.room_id === selectedRoom)
-            .map((d, i) => (
-              <div key={i}>
-                {viewMode === "EMPLOYEES" ? d.name : d.dept}
-              </div>
-            ))}
+          <div>Department: {selectedSeat.dept}</div>
+          <div>Status: {selectedSeat.status}</div>
         </div>
       )}
     </div>
@@ -343,19 +290,6 @@ const styles = {
     gap: 8,
     flexWrap: "wrap",
     marginBottom: 10,
-  },
-
-  btnMode: {
-    padding: "6px 10px",
-    border: "none",
-    borderRadius: 6,
-  },
-
-  refresh: {
-    padding: "6px 10px",
-    borderRadius: 6,
-    background: "#f59e0b",
-    border: "none",
   },
 
   kpiRow: {
