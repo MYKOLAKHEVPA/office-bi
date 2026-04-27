@@ -26,7 +26,7 @@ export default function App() {
     return (
       <div style={styles.loginBg}>
         <div style={styles.loginCard}>
-          <h1>Office BI</h1>
+          <h2>Office BI</h2>
 
           <input
             type="password"
@@ -36,8 +36,8 @@ export default function App() {
             style={styles.input}
           />
 
-          <button style={styles.btn} onClick={login}>
-            Enter
+          <button onClick={login} style={styles.btn}>
+            Login
           </button>
 
           <div style={styles.brand}>
@@ -59,25 +59,14 @@ function Dashboard() {
   const [floorMode, setFloorMode] = useState("ALL");
   const [floor, setFloor] = useState(1);
 
-  const [searchName, setSearchName] = useState("");
-  const [searchDept, setSearchDept] = useState("");
-
-  const [detailMode, setDetailMode] =
-    useState("EMPLOYEES");
-
-  const [selectedRoom, setSelectedRoom] =
-    useState(null);
-
-  const [selectedSeat, setSelectedSeat] =
-    useState(null);
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [selectedSeat, setSelectedSeat] = useState(null);
 
   useEffect(() => {
     fetch(SHEET_URL)
       .then((r) => r.text())
       .then((txt) => {
-        const rows = txt
-          .split("\n")
-          .filter(Boolean);
+        const rows = txt.split("\n").filter(Boolean);
 
         const parsed = rows.slice(1).map((r) => {
           const c = r.split(",");
@@ -87,9 +76,7 @@ function Dashboard() {
             room_id: c[1],
             departments: c[3],
             seat_id: c[4],
-            status: (
-              c[5] || "other"
-            ).toLowerCase(),
+            status: (c[5] || "other").toLowerCase(),
             last_name: c[6] || "",
           };
         });
@@ -105,35 +92,24 @@ function Dashboard() {
           ? true
           : d.floor === floor;
 
-      const okName =
-        !searchName ||
-        d.last_name
-          .toLowerCase()
-          .includes(
-            searchName.toLowerCase()
-          );
-
-      const okDept =
-        !searchDept ||
-        (d.departments || "")
-          .toLowerCase()
-          .includes(
-            searchDept.toLowerCase()
-          );
-
-      return (
-        okFloor &&
-        okName &&
-        okDept
-      );
+      return okFloor;
     });
-  }, [
-    data,
-    floorMode,
-    floor,
-    searchName,
-    searchDept,
-  ]);
+  }, [data, floorMode, floor]);
+
+  // KPI (КРІ повернули)
+  const kpi = useMemo(() => {
+    let free = 0,
+      occ = 0,
+      other = 0;
+
+    filtered.forEach((d) => {
+      if (d.status === "free") free++;
+      else if (d.status === "occupied") occ++;
+      else other++;
+    });
+
+    return { free, occ, other, total: filtered.length };
+  }, [filtered]);
 
   const rooms = useMemo(() => {
     const map = {};
@@ -143,540 +119,204 @@ function Dashboard() {
         map[r.room_id] = {
           room_id: r.room_id,
           seats: [],
-          deps: new Set(),
         };
       }
 
       map[r.room_id].seats.push(r);
-
-      if (r.departments)
-        map[r.room_id].deps.add(
-          r.departments
-        );
     });
 
-    return Object.values(map).map(
-      (r) => ({
-        ...r,
-        departments:
-          Array.from(r.deps),
-      })
-    );
+    return Object.values(map);
   }, [filtered]);
 
-  const activeRoom = rooms.find(
-    (r) =>
-      r.room_id ===
-      selectedRoom
-  );
+  const cols = Math.max(2, Math.ceil(Math.sqrt(rooms.length)));
+  const cellW = 240;
+  const cellH = 160;
 
-  const cols = Math.max(
-    2,
-    Math.ceil(
-      Math.sqrt(rooms.length)
-    )
-  );
-
-  const cellW = 250;
-  const cellH = 180;
-
-  const svgW =
-    cols * cellW + 40;
-
-  const svgH =
-    Math.ceil(
-      rooms.length / cols
-    ) *
-      cellH +
-    40;
-
-  const busy =
-    filtered.filter(
-      (x) =>
-        x.status ===
-        "occupied"
-    ).length;
-
-  const busyPct =
-    filtered.length > 0
-      ? Math.round(
-          (busy /
-            filtered.length) *
-            100
-        )
-      : 0;
+  const svgW = cols * cellW + 40;
+  const svgH = Math.ceil(rooms.length / cols) * cellH + 40;
 
   return (
     <div style={styles.page}>
-      <h1>
-        🏢 Office BI Dashboard
-      </h1>
+      <h2>🏢 Office Dashboard</h2>
 
-      {/* controls */}
-      <div style={styles.top}>
-        <button
-          style={styles.btnSmall}
-          onClick={() =>
-            setFloorMode("ALL")
-          }
-        >
-          All Floors
-        </button>
-
-        <button
-          style={styles.btnSmall}
-          onClick={() =>
-            setFloorMode(
-              "ONE"
-            )
-          }
-        >
-          One Floor
-        </button>
-
-        {floorMode ===
-          "ONE" && (
-          <select
-            value={floor}
-            style={
-              styles.input2
-            }
-            onChange={(e) =>
-              setFloor(
-                Number(
-                  e.target.value
-                )
-              )
-            }
-          >
-            {[1,2,3,4,5,6,7,8,9].map(
-              (f) => (
-                <option
-                  key={f}
-                  value={f}
-                >
-                  Floor {f}
-                </option>
-              )
-            )}
-          </select>
-        )}
-
-        <input
-          style={styles.input2}
-          placeholder="Пошук прізвища"
-          value={searchName}
-          onChange={(e) =>
-            setSearchName(
-              e.target.value
-            )
-          }
-        />
-
-        <input
-          style={styles.input2}
-          placeholder="Пошук департаменту"
-          value={searchDept}
-          onChange={(e) =>
-            setSearchDept(
-              e.target.value
-            )
-          }
-        />
-
-        <button
-          style={styles.btnSmall}
-          onClick={() =>
-            setDetailMode(
-              "EMPLOYEES"
-            )
-          }
-        >
-          Працівники
-        </button>
-
-        <button
-          style={styles.btnSmall}
-          onClick={() =>
-            setDetailMode(
-              "DEPARTMENTS"
-            )
-          }
-        >
-          Департаменти
-        </button>
+      {/* KPI BAR */}
+      <div style={styles.kpiRow}>
+        <Kpi label="Free" val={kpi.free} color="#22c55e" />
+        <Kpi label="Occupied" val={kpi.occ} color="#ef4444" />
+        <Kpi label="Other" val={kpi.other} color="#94a3b8" />
+        <Kpi label="Total" val={kpi.total} color="#2563eb" />
       </div>
 
-      {/* graph */}
-      <div style={styles.graph}>
-        Завантаженість{" "}
-        {busyPct}%
-        <div style={styles.bar}>
-          <div
-            style={{
-              ...styles.fill,
-              width: `${busyPct}%`,
-            }}
-          />
-        </div>
-      </div>
-
-      {/* map */}
+      {/* MAP */}
       <div style={styles.map}>
-        <svg
-          width={svgW}
-          height={svgH}
-        >
-          <rect
-            width={svgW}
-            height={svgH}
-            fill="#eef2ff"
-          />
+        <svg width={svgW} height={svgH}>
+          <rect width={svgW} height={svgH} fill="#eef2ff" />
 
           {rooms.map((r, i) => {
-            const x =
-              20 +
-              (i % cols) *
-                cellW;
+            const x = 20 + (i % cols) * cellW;
+            const y = 20 + Math.floor(i / cols) * cellH;
 
-            const y =
-              20 +
-              Math.floor(
-                i / cols
-              ) *
-                cellH;
+            const stats = {
+              free: r.seats.filter((s) => s.status === "free").length,
+              occ: r.seats.filter((s) => s.status === "occupied").length,
+              other: r.seats.filter((s) => s.status === "other").length,
+            };
 
             return (
-              <g
-                key={
-                  r.room_id
-                }
-              >
+              <g key={r.room_id}>
+                {/* ROOM BOX */}
                 <rect
                   x={x}
                   y={y}
                   width="220"
-                  height="130"
-                  rx="18"
-                  fill={
-                    selectedRoom ===
-                    r.room_id
-                      ? "#2563eb"
-                      : "#334155"
-                  }
-                  style={{
-                    cursor:
-                      "pointer",
-                  }}
-                  onClick={() => {
-                    setSelectedRoom(
-                      r.room_id
-                    );
-                    setSelectedSeat(
-                      null
-                    );
-                  }}
+                  height="120"
+                  rx="16"
+                  fill="#1f2937"
+                  onClick={() => setSelectedRoom(r.room_id)}
+                  style={{ cursor: "pointer" }}
                 />
 
-                <text
-                  x={x + 12}
-                  y={y + 20}
-                  fill="#fff"
-                  fontWeight="700"
-                >
+                {/* ROOM ID */}
+                <text x={x + 10} y={y + 18} fill="#fff" fontSize="12">
                   {r.room_id}
                 </text>
 
-                {r.seats.map(
-                  (
-                    s,
-                    idx
-                  ) => {
-                    const sx =
-                      x +
-                      12 +
-                      (idx %
-                        10) *
-                        19;
+                {/* 🔥 3 ЧИСЛА НА КОЖНОМУ КВАДРАТІ */}
+                <text x={x + 10} y={y + 45} fill="#22c55e" fontSize="11">
+                  🟢 {stats.free}
+                </text>
 
-                    const sy =
-                      y +
-                      40 +
-                      Math.floor(
-                        idx /
-                          10
-                      ) *
-                        18;
+                <text x={x + 10} y={y + 65} fill="#ef4444" fontSize="11">
+                  🔴 {stats.occ}
+                </text>
 
-                    const active =
-                      selectedSeat?.seat_id ===
-                      s.seat_id;
+                <text x={x + 10} y={y + 85} fill="#94a3b8" fontSize="11">
+                  ⚪ {stats.other}
+                </text>
 
-                    return (
-                      <rect
-                        key={
-                          s.seat_id
-                        }
-                        x={sx}
-                        y={sy}
-                        width="13"
-                        height="13"
-                        rx="4"
-                        fill={
-                          s.status ===
-                          "free"
-                            ? "#22c55e"
-                            : s.status ===
-                              "occupied"
-                            ? "#ef4444"
-                            : "#cbd5e1"
-                        }
-                        style={{
-                          cursor:
-                            "pointer",
-                          stroke:
-                            active
-                              ? "#facc15"
-                              : "none",
-                          strokeWidth:
-                            active
-                              ? 3
-                              : 0,
-                        }}
-                        onClick={() => {
-                          setSelectedSeat(
-                            s
-                          );
-                          setSelectedRoom(
-                            r.room_id
-                          );
-                        }}
-                      />
-                    );
-                  }
-                )}
+                {/* SEATS */}
+                {r.seats.map((s, idx) => {
+                  const sx = x + 120 + (idx % 6) * 14;
+                  const sy = y + 30 + Math.floor(idx / 6) * 14;
+
+                  return (
+                    <rect
+                      key={s.seat_id}
+                      x={sx}
+                      y={sy}
+                      width="10"
+                      height="10"
+                      fill={
+                        s.status === "free"
+                          ? "#22c55e"
+                          : s.status === "occupied"
+                          ? "#ef4444"
+                          : "#94a3b8"
+                      }
+                      onClick={() => setSelectedSeat(s)}
+                    />
+                  );
+                })}
               </g>
             );
           })}
         </svg>
       </div>
 
-      {/* selected employee */}
-      {selectedSeat && (
-        <div
-          style={
-            styles.person
-          }
-        >
-          <b>
-            {
-              selectedSeat.seat_id
-            }
-          </b>
-          <div>
-            {
-              selectedSeat.last_name
-            }
-          </div>
-          <div>
-            {
-              selectedSeat.departments
-            }
-          </div>
-          <div>
-            {
-              selectedSeat.status
-            }
-          </div>
-        </div>
-      )}
-
-      {/* room details */}
-      {activeRoom && (
+      {/* DETAILS */}
+      {selectedRoom && (
         <div style={styles.panel}>
-          <h3>
-            Кабінет{" "}
-            {
-              activeRoom.room_id
-            }
-          </h3>
+          <h4>Room {selectedRoom}</h4>
 
-          {detailMode ===
-          "EMPLOYEES"
-            ? activeRoom.seats.map(
-                (
-                  s,
-                  i
-                ) => (
-                  <div
-                    key={i}
-                    style={
-                      styles.row
-                    }
-                  >
-                    {
-                      s.seat_id
-                    }{" "}
-                    —{" "}
-                    {
-                      s.last_name
-                    }
-                  </div>
-                )
-              )
-            : activeRoom.departments.map(
-                (
-                  d,
-                  i
-                ) => (
-                  <div
-                    key={i}
-                    style={
-                      styles.row
-                    }
-                  >
-                    {d}
-                  </div>
-                )
-              )}
+          {filtered
+            .filter((d) => d.room_id === selectedRoom)
+            .map((d, i) => (
+              <div key={i}>
+                {d.seat_id} — {d.last_name}
+              </div>
+            ))}
         </div>
       )}
     </div>
   );
 }
 
+function Kpi({ label, val, color }) {
+  return (
+    <div style={{ ...styles.kpi, borderLeft: `4px solid ${color}` }}>
+      <b>{val}</b>
+      <div>{label}</div>
+    </div>
+  );
+}
+
 const styles = {
   page: {
-    padding: 14,
-    minHeight:
-      "100vh",
-    fontFamily:
-      "Arial",
-    background:
-      "radial-gradient(circle at top,#dbeafe,#eff6ff,#f8fafc)",
+    fontFamily: "Arial",
+    padding: 12,
+    background: "linear-gradient(#e0f2fe,#f8fafc)",
+    minHeight: "100vh",
   },
 
   loginBg: {
-    minHeight:
-      "100vh",
+    height: "100vh",
     display: "flex",
-    justifyContent:
-      "center",
-    alignItems:
-      "center",
-    background:
-      "linear-gradient(135deg,#1d4ed8,#60a5fa)",
+    justifyContent: "center",
+    alignItems: "center",
+    background: "#0f172a",
   },
 
   loginCard: {
-    width: 330,
-    padding: 30,
-    borderRadius: 22,
-    background:
-      "rgba(255,255,255,.18)",
-    color: "#fff",
+    background: "white",
+    padding: 20,
+    borderRadius: 12,
+    width: 280,
   },
 
   input: {
     width: "100%",
-    padding: 10,
-    borderRadius: 12,
-    border: 0,
-    marginBottom: 10,
-  },
-
-  input2: {
-    padding: 10,
-    borderRadius: 12,
-    border:
-      "1px solid #cbd5e1",
+    padding: 8,
+    marginTop: 10,
   },
 
   btn: {
     width: "100%",
-    padding: 10,
-    borderRadius: 12,
+    marginTop: 10,
+    padding: 8,
+    background: "#2563eb",
+    color: "white",
     border: 0,
-    background:
-      "#22c55e",
-    color: "#fff",
-  },
-
-  btnSmall: {
-    padding:
-      "10px 14px",
-    borderRadius: 12,
-    border: 0,
-    background:
-      "#2563eb",
-    color: "#fff",
-    cursor: "pointer",
   },
 
   brand: {
-    marginTop: 14,
-    fontSize: 12,
+    marginTop: 10,
+    fontSize: 11,
+    opacity: 0.7,
   },
 
-  top: {
+  kpiRow: {
     display: "flex",
     gap: 10,
-    flexWrap:
-      "wrap",
-    marginBottom: 14,
+    marginBottom: 10,
   },
 
-  graph: {
-    padding: 14,
-    borderRadius: 16,
-    background:
-      "#fff",
-    marginBottom: 14,
-  },
-
-  bar: {
-    height: 10,
-    background:
-      "#e5e7eb",
-    borderRadius: 8,
-    marginTop: 6,
-    overflow:
-      "hidden",
-  },
-
-  fill: {
-    height: "100%",
-    background:
-      "linear-gradient(90deg,#22c55e,#f59e0b,#ef4444)",
+  kpi: {
+    background: "white",
+    padding: 8,
+    borderRadius: 10,
+    minWidth: 80,
   },
 
   map: {
-    overflow: "auto",
-    background:
-      "#fff",
-    padding: 12,
-    borderRadius: 18,
-  },
-
-  person: {
-    marginTop: 14,
-    padding: 16,
-    borderRadius: 18,
-    background:
-      "#fff7ed",
+    background: "white",
+    borderRadius: 12,
+    padding: 10,
   },
 
   panel: {
-    marginTop: 14,
-    padding: 16,
-    borderRadius: 18,
-    background:
-      "#ffffff",
-  },
-
-  row: {
-    padding: 8,
-    borderBottom:
-      "1px solid #eee",
+    marginTop: 10,
+    background: "white",
+    padding: 10,
+    borderRadius: 10,
   },
 };
