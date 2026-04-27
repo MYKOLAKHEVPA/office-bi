@@ -28,7 +28,6 @@ export default function App() {
 
           <input
             type="password"
-            placeholder="Password"
             value={pass}
             onChange={(e) => setPass(e.target.value)}
             style={styles.input}
@@ -54,11 +53,15 @@ export default function App() {
 function Dashboard() {
   const [data, setData] = useState([]);
 
-  const [mode, setMode] = useState("EMPLOYEES"); // EMPLOYEES / DEPTS
+  // 🔥 FIX: EMP / DEPT mode
+  const [viewMode, setViewMode] = useState("EMPLOYEES");
+
   const [floorMode, setFloorMode] = useState("ALL");
   const [floor, setFloor] = useState(1);
 
-  const [search, setSearch] = useState("");
+  const [searchEmp, setSearchEmp] = useState("");
+  const [searchDept, setSearchDept] = useState("");
+
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
 
@@ -85,21 +88,31 @@ function Dashboard() {
       });
   }, []);
 
-  // FILTERS
+  // 🔥 FIX: filters for both modes
   const filtered = useMemo(() => {
     return data.filter((d) => {
       const okFloor =
         floorMode === "ALL" ? true : d.floor === floor;
 
-      const okSearch =
-        !search ||
-        (d.name || "").toLowerCase().includes(search.toLowerCase());
+      const okEmp =
+        viewMode !== "EMPLOYEES"
+          ? true
+          : !searchEmp ||
+            d.name.toLowerCase().includes(searchEmp.toLowerCase());
 
-      return okFloor && okSearch;
+      const okDept =
+        viewMode !== "DEPTS"
+          ? true
+          : !searchDept ||
+            (d.dept || "")
+              .toLowerCase()
+              .includes(searchDept.toLowerCase());
+
+      return okFloor && okEmp && okDept;
     });
-  }, [data, floorMode, floor, search]);
+  }, [data, floorMode, floor, viewMode, searchEmp, searchDept]);
 
-  // KPI (КРІ залишено)
+  // KPI (НЕ чіпав)
   const kpi = useMemo(() => {
     let free = 0,
       occ = 0,
@@ -128,7 +141,8 @@ function Dashboard() {
   }, [filtered]);
 
   const refresh = () => {
-    setSearch("");
+    setSearchEmp("");
+    setSearchDept("");
     setSelectedRoom(null);
     setSelectedEmployee(null);
     setFloorMode("ALL");
@@ -147,7 +161,6 @@ function Dashboard() {
 
       {/* CONTROLS */}
       <div style={styles.controls}>
-        {/* floor */}
         <select
           value={floorMode}
           onChange={(e) => setFloorMode(e.target.value)}
@@ -167,42 +180,50 @@ function Dashboard() {
           </select>
         )}
 
-        {/* search */}
-        <input
-          placeholder="Search surname..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={styles.inputSmall}
-        />
+        {/* EMP SEARCH */}
+        {viewMode === "EMPLOYEES" && (
+          <input
+            placeholder="Search employee..."
+            value={searchEmp}
+            onChange={(e) => setSearchEmp(e.target.value)}
+          />
+        )}
 
-        {/* mode */}
+        {/* DEPT SEARCH */}
+        {viewMode === "DEPTS" && (
+          <input
+            placeholder="Search department..."
+            value={searchDept}
+            onChange={(e) => setSearchDept(e.target.value)}
+          />
+        )}
+
         <button
-          onClick={() => setMode("EMPLOYEES")}
+          onClick={() => setViewMode("EMPLOYEES")}
           style={{
-            ...styles.modeBtn,
+            ...styles.btnMode,
             background:
-              mode === "EMPLOYEES" ? "#2563eb" : "#e5e7eb",
-            color: mode === "EMPLOYEES" ? "#fff" : "#000",
+              viewMode === "EMPLOYEES" ? "#2563eb" : "#e5e7eb",
+            color: viewMode === "EMPLOYEES" ? "#fff" : "#000",
           }}
         >
           Працівники
         </button>
 
         <button
-          onClick={() => setMode("DEPTS")}
+          onClick={() => setViewMode("DEPTS")}
           style={{
-            ...styles.modeBtn,
+            ...styles.btnMode,
             background:
-              mode === "DEPTS" ? "#2563eb" : "#e5e7eb",
-            color: mode === "DEPTS" ? "#fff" : "#000",
+              viewMode === "DEPTS" ? "#2563eb" : "#e5e7eb",
+            color: viewMode === "DEPTS" ? "#fff" : "#000",
           }}
         >
           Департаменти
         </button>
 
-        {/* refresh */}
         <button onClick={refresh} style={styles.refresh}>
-          🔄 Refresh
+          🔄
         </button>
       </div>
 
@@ -223,38 +244,44 @@ function Dashboard() {
             const x = 20 + (i % cols) * cellW;
             const y = 20 + Math.floor(i / cols) * cellH;
 
-            const highlight =
-              selectedEmployee &&
-              r.seats.some(
-                (s) =>
-                  s.name === selectedEmployee.name
-              );
+            const stats = {
+              free: r.seats.filter((s) => s.status === "free").length,
+              occ: r.seats.filter((s) => s.status === "occupied").length,
+              other: r.seats.filter((s) => s.status === "other").length,
+            };
 
             return (
               <g key={r.room_id}>
-                {/* room */}
                 <rect
                   x={x}
                   y={y}
                   width="220"
                   height="120"
-                  rx="14"
-                  fill={highlight ? "#1d4ed8" : "#1f2937"}
-                  style={{ cursor: "pointer" }}
+                  rx="12"
+                  fill="#1f2937"
                   onClick={() => setSelectedRoom(r.room_id)}
                 />
 
-                <text x={x + 10} y={y + 18} fill="#fff">
-                  {r.room_id}
+                {/* 3 ЦИФРИ (НЕ ПРИБИРАВ) */}
+                <text x={x + 10} y={y + 40} fill="#22c55e">
+                  🟢 {stats.free}
                 </text>
 
-                {/* seats */}
+                <text x={x + 10} y={y + 60} fill="#ef4444">
+                  🔴 {stats.occ}
+                </text>
+
+                <text x={x + 10} y={y + 80} fill="#94a3b8">
+                  ⚪ {stats.other}
+                </text>
+
+                {/* SEATS */}
                 {r.seats.map((s, idx) => {
-                  const sx = x + 10 + (idx % 6) * 14;
-                  const sy = y + 30 + Math.floor(idx / 6) * 14;
+                  const sx = x + 120 + (idx % 6) * 12;
+                  const sy = y + 30 + Math.floor(idx / 6) * 12;
 
                   const isSel =
-                    selectedEmployee?.name === s.name;
+                    selectedEmployee?.seat_id === s.seat_id;
 
                   return (
                     <rect
@@ -271,11 +298,7 @@ function Dashboard() {
                           : "#94a3b8"
                       }
                       stroke={isSel ? "#facc15" : "none"}
-                      strokeWidth={isSel ? 2 : 0}
-                      onClick={() => {
-                        setSelectedEmployee(s);
-                        setSelectedRoom(r.room_id);
-                      }}
+                      onClick={() => setSelectedEmployee(s)}
                     />
                   );
                 })}
@@ -285,7 +308,7 @@ function Dashboard() {
         </svg>
       </div>
 
-      {/* DETAILS */}
+      {/* LOWER PANEL */}
       {selectedRoom && (
         <div style={styles.panel}>
           <h4>Room {selectedRoom}</h4>
@@ -293,19 +316,8 @@ function Dashboard() {
           {filtered
             .filter((d) => d.room_id === selectedRoom)
             .map((d, i) => (
-              <div
-                key={i}
-                onClick={() => setSelectedEmployee(d)}
-                style={{
-                  padding: 4,
-                  cursor: "pointer",
-                  background:
-                    selectedEmployee?.seat_id === d.seat_id
-                      ? "#dbeafe"
-                      : "transparent",
-                }}
-              >
-                {d.seat_id} — {d.name}
+              <div key={i}>
+                {viewMode === "EMPLOYEES" ? d.name : d.dept}
               </div>
             ))}
         </div>
@@ -333,15 +345,10 @@ const styles = {
     marginBottom: 10,
   },
 
-  inputSmall: {
-    padding: 6,
-    borderRadius: 6,
-  },
-
-  modeBtn: {
+  btnMode: {
     padding: "6px 10px",
-    borderRadius: 6,
     border: "none",
+    borderRadius: 6,
   },
 
   refresh: {
