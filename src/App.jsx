@@ -53,7 +53,8 @@ export default function App() {
 function Dashboard() {
   const [data, setData] = useState([]);
 
-  const [viewMode, setViewMode] = useState("EMPLOYEES");
+  // 🔥 MODE FIX (IMPORTANT)
+  const [mode, setMode] = useState("EMPLOYEES"); // EMPLOYEES / DEPTS
 
   const [floorMode, setFloorMode] = useState("ALL");
   const [floor, setFloor] = useState(1);
@@ -87,7 +88,7 @@ function Dashboard() {
       });
   }, []);
 
-  // 🔥 FILTERS (EMP + DEPT SEARCH)
+  // FILTERS
   const filtered = useMemo(() => {
     return data.filter((d) => {
       const okFloor =
@@ -137,7 +138,7 @@ function Dashboard() {
 
   const cols = Math.max(2, Math.ceil(Math.sqrt(rooms.length)));
   const cellW = 240;
-  const cellH = 170;
+  const cellH = 180;
 
   const svgW = cols * cellW + 40;
   const svgH = Math.ceil(rooms.length / cols) * cellH + 40;
@@ -167,25 +168,40 @@ function Dashboard() {
           </select>
         )}
 
-        {/* EMP SEARCH */}
         <input
           placeholder="Search employee..."
           value={searchEmp}
           onChange={(e) => setSearchEmp(e.target.value)}
         />
 
-        {/* DEPT SEARCH */}
         <input
           placeholder="Search department..."
           value={searchDept}
           onChange={(e) => setSearchDept(e.target.value)}
         />
 
-        <button onClick={() => setViewMode("EMPLOYEES")}>
+        {/* MODE BUTTONS FIXED */}
+        <button
+          onClick={() => setMode("EMPLOYEES")}
+          style={{
+            ...styles.btn,
+            background:
+              mode === "EMPLOYEES" ? "#2563eb" : "#e5e7eb",
+            color: mode === "EMPLOYEES" ? "#fff" : "#000",
+          }}
+        >
           Працівники
         </button>
 
-        <button onClick={() => setViewMode("DEPTS")}>
+        <button
+          onClick={() => setMode("DEPTS")}
+          style={{
+            ...styles.btn,
+            background:
+              mode === "DEPTS" ? "#2563eb" : "#e5e7eb",
+            color: mode === "DEPTS" ? "#fff" : "#000",
+          }}
+        >
           Департаменти
         </button>
       </div>
@@ -207,9 +223,14 @@ function Dashboard() {
             const x = 20 + (i % cols) * cellW;
             const y = 20 + Math.floor(i / cols) * cellH;
 
+            const stats = {
+              free: r.seats.filter((s) => s.status === "free").length,
+              occ: r.seats.filter((s) => s.status === "occupied").length,
+              other: r.seats.filter((s) => s.status === "other").length,
+            };
+
             return (
               <g key={r.room_id}>
-                {/* ROOM BOX */}
                 <rect
                   x={x}
                   y={y}
@@ -220,18 +241,28 @@ function Dashboard() {
                   onClick={() => setSelectedRoom(r.room_id)}
                 />
 
-                {/* 🔥 ROOM NUMBER (ДОДАНО) */}
+                {/* ROOM ID */}
                 <text x={x + 10} y={y + 18} fill="#fff">
                   {r.room_id}
                 </text>
 
+                {/* 🔥 3 NUMBERS BACK */}
+                <text x={x + 10} y={y + 45} fill="#22c55e">
+                  🟢 {stats.free}
+                </text>
+
+                <text x={x + 10} y={y + 65} fill="#ef4444">
+                  🔴 {stats.occ}
+                </text>
+
+                <text x={x + 10} y={y + 85} fill="#94a3b8">
+                  ⚪ {stats.other}
+                </text>
+
                 {/* SEATS */}
                 {r.seats.map((s, idx) => {
-                  const sx = x + 10 + (idx % 6) * 12;
+                  const sx = x + 120 + (idx % 6) * 12;
                   const sy = y + 30 + Math.floor(idx / 6) * 12;
-
-                  const isSel =
-                    selectedSeat?.seat_id === s.seat_id;
 
                   return (
                     <rect
@@ -247,7 +278,11 @@ function Dashboard() {
                           ? "#ef4444"
                           : "#94a3b8"
                       }
-                      stroke={isSel ? "#facc15" : "none"}
+                      stroke={
+                        selectedSeat?.seat_id === s.seat_id
+                          ? "#facc15"
+                          : "none"
+                      }
                       onClick={() => setSelectedSeat(s)}
                     />
                   );
@@ -258,15 +293,20 @@ function Dashboard() {
         </svg>
       </div>
 
-      {/* DETAILS */}
-      {selectedSeat && (
+      {/* DETAILS (FIXED MODE LOGIC) */}
+      {selectedRoom && (
         <div style={styles.panel}>
-          <h4>
-            {selectedSeat.seat_id} — {selectedSeat.name}
-          </h4>
+          <h4>Room {selectedRoom}</h4>
 
-          <div>Department: {selectedSeat.dept}</div>
-          <div>Status: {selectedSeat.status}</div>
+          {filtered
+            .filter((d) => d.room_id === selectedRoom)
+            .map((d, i) => (
+              <div key={i}>
+                {mode === "EMPLOYEES"
+                  ? `${d.seat_id} - ${d.name}`
+                  : `${d.seat_id} - ${d.dept}`}
+              </div>
+            ))}
         </div>
       )}
     </div>
@@ -290,6 +330,12 @@ const styles = {
     gap: 8,
     flexWrap: "wrap",
     marginBottom: 10,
+  },
+
+  btn: {
+    padding: "6px 10px",
+    borderRadius: 6,
+    border: "none",
   },
 
   kpiRow: {
