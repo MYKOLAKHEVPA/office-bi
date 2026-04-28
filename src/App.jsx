@@ -53,11 +53,13 @@ export default function App() {
 function Dashboard() {
   const [data, setData] = useState([]);
   const [mode, setMode] = useState("EMPLOYEES");
+
   const [floorMode, setFloorMode] = useState("ALL");
   const [floor, setFloor] = useState(1);
 
   const [searchEmp, setSearchEmp] = useState("");
   const [searchDept, setSearchDept] = useState("");
+  const [showDeptList, setShowDeptList] = useState(false);
 
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [selectedSeat, setSelectedSeat] = useState(null);
@@ -84,6 +86,10 @@ function Dashboard() {
         setData(parsed);
       });
   }, []);
+
+  const uniqueDepartments = useMemo(() => {
+    return [...new Set(data.map((d) => d.dept).filter(Boolean))].sort();
+  }, [data]);
 
   const filtered = useMemo(() => {
     return data.filter((d) => {
@@ -145,9 +151,23 @@ function Dashboard() {
   const svgW = cols * cellW + 40;
   const svgH = Math.ceil(rooms.length / cols) * cellH + 40;
 
+  const roomDepartments = useMemo(() => {
+    if (!selectedRoom) return [];
+    const list = filtered
+      .filter((d) => d.room_id === selectedRoom)
+      .map((d) => d.dept)
+      .filter(Boolean);
+
+    return [...new Set(list)];
+  }, [selectedRoom, filtered]);
+
   return (
     <div style={styles.page}>
-      <h2 style={{ marginTop: 0 }}>🏢 Office BI Dashboard</h2>
+      <div style={styles.overlay} />
+
+      <h2 style={{ marginTop: 0, position: "relative" }}>
+        🏢 Office BI Dashboard
+      </h2>
 
       {/* CONTROLS */}
       <div style={styles.controls}>
@@ -179,12 +199,42 @@ function Dashboard() {
           style={styles.inputSmall}
         />
 
-        <input
-          placeholder="Search department..."
-          value={searchDept}
-          onChange={(e) => setSearchDept(e.target.value)}
-          style={styles.inputSmall}
-        />
+        <div style={{ position: "relative" }}>
+          <input
+            placeholder="Search department..."
+            value={searchDept}
+            onFocus={() => setShowDeptList(true)}
+            onChange={(e) => {
+              setSearchDept(e.target.value);
+              setShowDeptList(true);
+            }}
+            style={styles.inputSmall}
+          />
+
+          {showDeptList && (
+            <div style={styles.dropdown}>
+              {uniqueDepartments
+                .filter((d) =>
+                  d
+                    .toLowerCase()
+                    .includes(searchDept.toLowerCase())
+                )
+                .slice(0, 15)
+                .map((dept, i) => (
+                  <div
+                    key={i}
+                    style={styles.dropdownItem}
+                    onClick={() => {
+                      setSearchDept(dept);
+                      setShowDeptList(false);
+                    }}
+                  >
+                    {dept}
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
 
         <button
           onClick={() => setMode("EMPLOYEES")}
@@ -219,7 +269,7 @@ function Dashboard() {
         <Kpi title="Total" val={kpi.total} color="#2563eb" />
       </div>
 
-      {/* 3D MAP */}
+      {/* MAP */}
       <div style={styles.mapWrap}>
         <svg width={svgW} height={svgH}>
           <defs>
@@ -248,11 +298,7 @@ function Dashboard() {
             </filter>
           </defs>
 
-          <rect
-            width={svgW}
-            height={svgH}
-            fill="#eef2ff"
-          />
+          <rect width={svgW} height={svgH} fill="#0f172a" />
 
           {rooms.map((room, i) => {
             const x = 20 + (i % cols) * cellW;
@@ -270,7 +316,6 @@ function Dashboard() {
 
             return (
               <g key={room.room_id}>
-                {/* top */}
                 <polygon
                   points={`${x},${y} ${x + 20},${y - 14} ${
                     x + 220
@@ -278,7 +323,6 @@ function Dashboard() {
                   fill="url(#roomTop)"
                 />
 
-                {/* side */}
                 <polygon
                   points={`${x + 200},${y} ${
                     x + 220
@@ -288,7 +332,6 @@ function Dashboard() {
                   fill="url(#roomSide)"
                 />
 
-                {/* front */}
                 <rect
                   x={x}
                   y={y}
@@ -301,7 +344,6 @@ function Dashboard() {
                   onClick={() => setSelectedRoom(room.room_id)}
                 />
 
-                {/* room id */}
                 <text
                   x={x + 12}
                   y={y + 18}
@@ -312,38 +354,20 @@ function Dashboard() {
                   Каб. {room.room_id}
                 </text>
 
-                {/* 3 цифри */}
-                <text
-                  x={x + 12}
-                  y={y + 42}
-                  fill="#22c55e"
-                  fontSize="12"
-                >
+                <text x={x + 12} y={y + 42} fill="#22c55e">
                   🟢 {free}
                 </text>
 
-                <text
-                  x={x + 12}
-                  y={y + 60}
-                  fill="#ef4444"
-                  fontSize="12"
-                >
+                <text x={x + 12} y={y + 60} fill="#ef4444">
                   🔴 {occ}
                 </text>
 
-                <text
-                  x={x + 12}
-                  y={y + 78}
-                  fill="#cbd5e1"
-                  fontSize="12"
-                >
+                <text x={x + 12} y={y + 78} fill="#cbd5e1">
                   ⚪ {other}
                 </text>
 
-                {/* seats */}
                 {room.seats.map((seat, idx) => {
-                  const sx =
-                    x + 95 + (idx % 6) * 15;
+                  const sx = x + 95 + (idx % 6) * 15;
                   const sy =
                     y + 28 + Math.floor(idx / 6) * 15;
 
@@ -371,9 +395,7 @@ function Dashboard() {
                         active ? "#facc15" : "none"
                       }
                       strokeWidth="2"
-                      style={{
-                        cursor: "pointer",
-                      }}
+                      style={{ cursor: "pointer" }}
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedSeat(seat);
@@ -404,13 +426,19 @@ function Dashboard() {
             Кабінет {selectedRoom}
           </h3>
 
-          {filtered
-            .filter((d) => d.room_id === selectedRoom)
-            .map((d, i) => (
+          {mode === "EMPLOYEES" &&
+            filtered
+              .filter((d) => d.room_id === selectedRoom)
+              .map((d, i) => (
+                <div key={i} style={styles.row}>
+                  {d.seat_id} — {d.name}
+                </div>
+              ))}
+
+          {mode === "DEPTS" &&
+            roomDepartments.map((dept, i) => (
               <div key={i} style={styles.row}>
-                {mode === "EMPLOYEES"
-                  ? `${d.seat_id} — ${d.name}`
-                  : `${d.seat_id} — ${d.dept}`}
+                {dept}
               </div>
             ))}
         </div>
@@ -439,8 +467,20 @@ const styles = {
   page: {
     fontFamily: "Arial",
     padding: 12,
-    background: "#f8fafc",
     minHeight: "100vh",
+    background:
+      "linear-gradient(135deg,#0f172a,#1e293b,#334155,#475569)",
+    backgroundSize: "cover",
+    position: "relative",
+    color: "#111",
+  },
+
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background:
+      "radial-gradient(circle at top right, rgba(245,158,11,.18), transparent 35%), radial-gradient(circle at bottom left, rgba(59,130,246,.18), transparent 35%)",
+    pointerEvents: "none",
   },
 
   controls: {
@@ -448,6 +488,8 @@ const styles = {
     gap: 8,
     flexWrap: "wrap",
     marginBottom: 12,
+    position: "relative",
+    zIndex: 2,
   },
 
   select: {
@@ -468,12 +510,33 @@ const styles = {
     cursor: "pointer",
   },
 
+  dropdown: {
+    position: "absolute",
+    top: 42,
+    left: 0,
+    width: 240,
+    maxHeight: 240,
+    overflowY: "auto",
+    background: "#fff",
+    borderRadius: 10,
+    boxShadow: "0 10px 24px rgba(0,0,0,.18)",
+    zIndex: 30,
+  },
+
+  dropdownItem: {
+    padding: 10,
+    cursor: "pointer",
+    borderBottom: "1px solid #eee",
+  },
+
   kpiRow: {
     display: "grid",
     gridTemplateColumns:
       "repeat(auto-fit,minmax(120px,1fr))",
     gap: 10,
     marginBottom: 12,
+    position: "relative",
+    zIndex: 2,
   },
 
   kpi: {
@@ -484,11 +547,13 @@ const styles = {
   },
 
   mapWrap: {
-    background: "#fff",
+    background: "rgba(255,255,255,.94)",
     borderRadius: 14,
     padding: 10,
     overflow: "auto",
-    boxShadow: "0 10px 24px rgba(0,0,0,.08)",
+    boxShadow: "0 10px 24px rgba(0,0,0,.18)",
+    position: "relative",
+    zIndex: 2,
   },
 
   highlightBox: {
@@ -497,6 +562,8 @@ const styles = {
     padding: 12,
     borderRadius: 12,
     boxShadow: "0 6px 16px rgba(37,99,235,.18)",
+    position: "relative",
+    zIndex: 2,
   },
 
   panel: {
@@ -504,11 +571,13 @@ const styles = {
     background: "#fff",
     padding: 12,
     borderRadius: 12,
-    boxShadow: "0 8px 20px rgba(0,0,0,.08)",
+    boxShadow: "0 8px 20px rgba(0,0,0,.12)",
+    position: "relative",
+    zIndex: 2,
   },
 
   row: {
-    padding: "6px 0",
+    padding: "8px 0",
     borderBottom: "1px solid #eee",
   },
 
@@ -518,7 +587,7 @@ const styles = {
     justifyContent: "center",
     alignItems: "center",
     background:
-      "linear-gradient(135deg,#dbeafe,#eef2ff,#f8fafc)",
+      "linear-gradient(135deg,#0f172a,#1e293b,#475569)",
   },
 
   loginCard: {
@@ -526,7 +595,7 @@ const styles = {
     padding: 24,
     borderRadius: 16,
     width: 320,
-    boxShadow: "0 15px 35px rgba(0,0,0,.12)",
+    boxShadow: "0 15px 35px rgba(0,0,0,.18)",
   },
 
   input: {
